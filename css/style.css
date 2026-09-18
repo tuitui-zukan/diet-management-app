@@ -17,7 +17,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
-  padding-bottom: calc(72px + var(--safe-bottom));
+  padding-bottom: calc(96px + var(--safe-bottom));
 }
 
 .app-header {
@@ -99,6 +99,7 @@ textarea:focus, input:focus {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
+  scroll-margin-bottom: 100px;
 }
 
 .link-chip {
