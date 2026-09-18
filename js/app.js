@@ -1,0 +1,299 @@
+/*
+ * ダイエット管理アプリ ロジック
+ * 保存先はすべてブラウザのlocalStorage（この端末のこのアプリにだけ保存される）。
+ * サーバーには一切送信されないので、データはiPhone内に閉じている。
+ */
+(function () {
+  "use strict";
+
+  // ---------- 共通：保存まわり ----------
+  function loadJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function saveJSON(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+    showSaveIndicator();
+  }
+
+  let saveIndicatorTimer = null;
+  function showSaveIndicator() {
+    const el = document.getElementById("save-indicator");
+    el.textContent = "保存しました";
+    el.classList.add("show");
+    clearTimeout(saveIndicatorTimer);
+    saveIndicatorTimer = setTimeout(() => el.classList.remove("show"), 900);
+  }
+
+  // ---------- 共通：日付まわり ----------
+  // 「今日」は端末のローカル時刻基準（チェックはリアルタイムで押すため）
+  function localISODateString(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function todayISO() {
+    return localISODateString(new Date());
+  }
+
+  // 週の計算はすべてUTC基準で統一し、タイムゾーンのズレでバグらないようにする
+  function isoDateStringFromUTC(d) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function isoWeekIdFromUTCDate(d) {
+    const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const dayNum = (dt.getUTCDay() + 6) % 7; // 月曜=0
+    dt.setUTCDate(dt.getUTCDate() - dayNum + 3);
+    const firstThursday = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+    const fDayNum = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - fDayNum + 3);
+    const weekNum = 1 + Math.round((dt - firstThursday) / 604800000);
+    return `${dt.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+  }
+
+  function currentWeekId() {
+    const now = new Date();
+    const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    return isoWeekIdFromUTCDate(utcDate);
+  }
+
+  function mondayOfISOWeek(weekId) {
+    const [yearStr, weekStr] = weekId.split("-W");
+    const year = Number(yearStr);
+    const week = Number(weekStr);
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const jan4DayNum = (jan4.getUTCDay() + 6) % 7;
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - jan4DayNum);
+    const monday = new Date(week1Monday);
+    monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+    return monday;
+  }
+
+  function getWeekDates(weekId) {
+    const monday = mondayOfISOWeek(weekId);
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setUTCDate(monday.getUTCDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  }
+
+  function shiftWeek(weekId, deltaWeeks) {
+    const monday = mondayOfISOWeek(weekId);
+    monday.setUTCDate(monday.getUTCDate() + deltaWeeks * 7);
+    return isoWeekIdFromUTCDate(monday);
+  }
+
+  function formatWeekLabel(weekId) {
+    const dates = getWeekDates(weekId);
+    const start = dates[0];
+    const end = dates[6];
+    return `${start.getUTCMonth() + 1}/${start.getUTCDate()} 〜 ${end.getUTCMonth() + 1}/${end.getUTCDate()}`;
+  }
+
+  function renderWeekDots(container, log) {
+    container.innerHTML = "";
+    const dows = ["日", "月", "火", "水", "木", "金", "土"];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const iso = localISODateString(d);
+      const done = !!log[iso];
+      const wrap = document.createElement("div");
+      wrap.className = "day-dot";
+      wrap.innerHTML = `<div class="dot ${done ? "done" : ""}">${done ? "✓" : ""}</div><div class="dow">${dows[d.getDay()]}</div>`;
+      container.appendChild(wrap);
+    }
+  }
+
+  // ---------- タブ切り替え ----------
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+  function switchTab(tab) {
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("hidden"));
+    document.getElementById(`tab-${tab}`).classList.remove("hidden");
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  }
+
+  // ---------- 筋トレ／マッサージ共通モジュール ----------
+  // どちらも「メモ欄＋今日やったチェック＋直近7日間の実績」という同じ構造なので使い回す
+  function createDailyCheckModule(config) {
+    const state = loadJSON(config.storageKey, { text: "", log: {} });
+    const textEl = document.getElementById(config.textFieldId);
+    const btnEl = document.getElementById(config.checkBtnId);
+    const statusEl = document.getElementById(config.statusId);
+    const dotsEl = document.getElementById(config.weekDotsId);
+    const totalEl = document.getElementById(config.totalId);
+
+    textEl.value = state.text || "";
+    textEl.addEventListener("input", () => {
+      state.text = textEl.value;
+      saveJSON(config.storageKey, state);
+    });
+
+    btnEl.addEventListener("click", () => {
+      const today = todayISO();
+      if (state.log[today]) delete state.log[today];
+      else state.log[today] = true;
+      saveJSON(config.storageKey, state);
+      render();
+    });
+
+    function render() {
+      const today = todayISO();
+      const done = !!state.log[today];
+      btnEl.classList.toggle("done", done);
+      btnEl.textContent = done ? "今日やった ✓（完了）" : "今日やった ✓";
+      statusEl.textContent = done ? "今日は実施済みです" : "まだ未実施です";
+      renderWeekDots(dotsEl, state.log);
+      const total = Object.values(state.log).filter(Boolean).length;
+      totalEl.textContent = `これまでの実施日数：${total}日`;
+    }
+
+    render();
+  }
+
+  createDailyCheckModule({
+    storageKey: "dietapp_workout_v1",
+    textFieldId: "workout-menu",
+    checkBtnId: "workout-check-btn",
+    statusId: "workout-today-status",
+    weekDotsId: "workout-week-dots",
+    totalId: "workout-total",
+  });
+
+  createDailyCheckModule({
+    storageKey: "dietapp_massage_v1",
+    textFieldId: "massage-memo",
+    checkBtnId: "massage-check-btn",
+    statusId: "massage-today-status",
+    weekDotsId: "massage-week-dots",
+    totalId: "massage-total",
+  });
+
+  // ---------- 献立モジュール ----------
+  (function initMeal() {
+    const LS_MEAL = "dietapp_meal_v1";
+    const mealState = loadJSON(LS_MEAL, { weeks: {} });
+    let weekId = currentWeekId();
+
+    const weekLabelEl = document.getElementById("meal-week-label");
+    const prevBtn = document.getElementById("meal-prev-week");
+    const nextBtn = document.getElementById("meal-next-week");
+    const budgetEl = document.getElementById("meal-budget");
+    const inventoryEl = document.getElementById("meal-inventory");
+    const planEl = document.getElementById("meal-plan");
+    const daysEl = document.getElementById("meal-days");
+    const actualCostEl = document.getElementById("meal-actual-cost");
+    const diffEl = document.getElementById("meal-diff");
+
+    function getWeekData(id) {
+      if (!mealState.weeks[id]) {
+        mealState.weeks[id] = { budget: "", inventory: "", plan: "", actualCost: "", days: {} };
+      }
+      return mealState.weeks[id];
+    }
+
+    function renderDiff(data) {
+      const budget = Number(data.budget) || 0;
+      const actual = Number(data.actualCost) || 0;
+      if (!data.budget && !data.actualCost) {
+        diffEl.textContent = "";
+        diffEl.className = "diff-text";
+        return;
+      }
+      const diff = budget - actual;
+      if (diff >= 0) {
+        diffEl.textContent = `予算内：残り${diff.toLocaleString()}円`;
+        diffEl.className = "diff-text under";
+      } else {
+        diffEl.textContent = `予算オーバー：${Math.abs(diff).toLocaleString()}円`;
+        diffEl.className = "diff-text over";
+      }
+    }
+
+    function renderDays(data) {
+      daysEl.innerHTML = "";
+      const dates = getWeekDates(weekId);
+      const dows = ["月", "火", "水", "木", "金", "土", "日"];
+      dates.forEach((d, i) => {
+        const iso = isoDateStringFromUTC(d);
+        const checked = !!data.days[iso];
+        const row = document.createElement("label");
+        row.className = "meal-day-row";
+        row.innerHTML = `<span class="day-label">${d.getUTCMonth() + 1}/${d.getUTCDate()}（${dows[i]}）</span><input type="checkbox" ${checked ? "checked" : ""} data-date="${iso}">`;
+        daysEl.appendChild(row);
+      });
+      daysEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) data.days[cb.dataset.date] = true;
+          else delete data.days[cb.dataset.date];
+          saveJSON(LS_MEAL, mealState);
+        });
+      });
+    }
+
+    function render() {
+      const data = getWeekData(weekId);
+      weekLabelEl.textContent = formatWeekLabel(weekId);
+      budgetEl.value = data.budget;
+      inventoryEl.value = data.inventory;
+      planEl.value = data.plan;
+      actualCostEl.value = data.actualCost;
+      renderDays(data);
+      renderDiff(data);
+    }
+
+    budgetEl.addEventListener("input", () => {
+      const data = getWeekData(weekId);
+      data.budget = budgetEl.value;
+      saveJSON(LS_MEAL, mealState);
+      renderDiff(data);
+    });
+    inventoryEl.addEventListener("input", () => {
+      getWeekData(weekId).inventory = inventoryEl.value;
+      saveJSON(LS_MEAL, mealState);
+    });
+    planEl.addEventListener("input", () => {
+      getWeekData(weekId).plan = planEl.value;
+      saveJSON(LS_MEAL, mealState);
+    });
+    actualCostEl.addEventListener("input", () => {
+      const data = getWeekData(weekId);
+      data.actualCost = actualCostEl.value;
+      saveJSON(LS_MEAL, mealState);
+      renderDiff(data);
+    });
+    prevBtn.addEventListener("click", () => {
+      weekId = shiftWeek(weekId, -1);
+      render();
+    });
+    nextBtn.addEventListener("click", () => {
+      weekId = shiftWeek(weekId, 1);
+      render();
+    });
+
+    render();
+  })();
+
+  // ---------- オフラインで開けるようにService Workerを登録 ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("service-worker.js").catch(() => {});
+    });
+  }
+})();

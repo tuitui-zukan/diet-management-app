@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>ダイエット管理</title>
+
+<!-- iPhoneのホーム画面に追加したときにフルスクリーンのアプリっぽく開くための設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ダイエット管理">
+<meta name="theme-color" content="#2f6f4f">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>ダイエット管理</h1>
+</header>
+
+<main id="app">
+
+  <!-- 筋トレタブ -->
+  <section id="tab-workout" class="tab-panel">
+    <h2>筋トレメニュー</h2>
+
+    <div class="card">
+      <label for="workout-menu">今週のメニュー</label>
+      <textarea id="workout-menu" rows="5" placeholder="例）スクワット20回×3セット、腹筋15回×3セット..."></textarea>
+    </div>
+
+    <div class="card check-card">
+      <button id="workout-check-btn" class="check-btn">今日やった ✓</button>
+      <p id="workout-today-status" class="status-text"></p>
+    </div>
+
+    <div class="card">
+      <p class="card-label">直近7日間</p>
+      <div id="workout-week-dots" class="week-dots"></div>
+      <p id="workout-total" class="total-text"></p>
+    </div>
+  </section>
+
+  <!-- マッサージタブ -->
+  <section id="tab-massage" class="tab-panel hidden">
+    <h2>小顔マッサージ</h2>
+
+    <div class="card">
+      <label for="massage-memo">やり方メモ（任意）</label>
+      <textarea id="massage-memo" rows="4" placeholder="例）リンパを耳下から鎖骨に流す、頬を上に持ち上げる..."></textarea>
+    </div>
+
+    <div class="card check-card">
+      <button id="massage-check-btn" class="check-btn">今日やった ✓</button>
+      <p id="massage-today-status" class="status-text"></p>
+    </div>
+
+    <div class="card">
+      <p class="card-label">直近7日間</p>
+      <div id="massage-week-dots" class="week-dots"></div>
+      <p id="massage-total" class="total-text"></p>
+    </div>
+  </section>
+
+  <!-- 献立タブ -->
+  <section id="tab-meal" class="tab-panel hidden">
+    <h2>献立管理</h2>
+
+    <div class="card week-nav">
+      <button id="meal-prev-week" class="nav-btn">←前週</button>
+      <span id="meal-week-label" class="week-label"></span>
+      <button id="meal-next-week" class="nav-btn">次週→</button>
+    </div>
+
+    <div class="card">
+      <label for="meal-budget">今週の予算（円）</label>
+      <input type="number" id="meal-budget" inputmode="numeric" placeholder="例）5000">
+    </div>
+
+    <div class="card">
+      <label for="meal-inventory">冷蔵庫の在庫メモ</label>
+      <textarea id="meal-inventory" rows="3" placeholder="例）鶏むね肉、卵、キャベツ半玉..."></textarea>
+      <p class="hint">↑この内容と予算をClaudeに伝えると、使い切り＆予算内の献立を作ってもらえます</p>
+    </div>
+
+    <div class="card">
+      <label for="meal-plan">今週の献立（Claudeから受け取った内容を貼り付け）</label>
+      <textarea id="meal-plan" rows="8" placeholder="Claudeが作成した1週間の献立をここに貼り付け"></textarea>
+    </div>
+
+    <div class="card">
+      <p class="card-label">実行チェック</p>
+      <div id="meal-days" class="meal-days"></div>
+    </div>
+
+    <div class="card">
+      <label for="meal-actual-cost">実際にかかった金額（円）</label>
+      <input type="number" id="meal-actual-cost" inputmode="numeric" placeholder="例）4800">
+      <p id="meal-diff" class="diff-text"></p>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="workout">
+    <span class="tab-icon">🏋️</span><span>筋トレ</span>
+  </button>
+  <button class="tab-btn" data-tab="massage">
+    <span class="tab-icon">💆</span><span>マッサージ</span>
+  </button>
+  <button class="tab-btn" data-tab="meal">
+    <span class="tab-icon">🍱</span><span>献立</span>
+  </button>
+</nav>
+
+<p id="save-indicator" class="save-indicator"></p>
+
+<script src="js/app.js"></script>
+</body>
+</html>
