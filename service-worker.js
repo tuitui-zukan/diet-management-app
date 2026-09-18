@@ -2,7 +2,7 @@
  * オフラインでもアプリを開けるようにするためのキャッシュ。
  * データ自体（localStorage）はキャッシュと無関係で、常に端末に残る。
  */
-const CACHE_NAME = "dietapp-cache-v1";
+const CACHE_NAME = "dietapp-cache-v2";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
@@ -27,8 +27,16 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// ネットワークが使えるときは常に最新版を取りに行き、キャッシュはオフライン時の保険として使う
+// （キャッシュ優先にすると、コードを更新してもスマホ側がいつまでも古い版を表示し続けてしまうため）
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
