@@ -125,12 +125,20 @@ textarea:focus, input:focus {
   color: var(--color-sub);
 }
 
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .add-row {
   display: flex;
   gap: 8px;
 }
 
-.add-row input[type="text"] {
+.add-form input[type="text"],
+.add-row input[type="text"],
+.add-row input[type="url"] {
   flex: 1;
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -138,9 +146,12 @@ textarea:focus, input:focus {
   font-size: 15px;
   background: #fafafa;
   color: var(--color-text);
+  width: 100%;
 }
 
-.add-row input[type="text"]:focus {
+.add-form input[type="text"]:focus,
+.add-row input[type="text"]:focus,
+.add-row input[type="url"]:focus {
   outline: 2px solid var(--color-primary);
   background: #fff;
 }
@@ -190,6 +201,12 @@ textarea:focus, input:focus {
   color: var(--color-primary);
   font-weight: 600;
   text-decoration: underline;
+}
+
+.inline-link-icon {
+  margin-left: 6px;
+  text-decoration: none;
+  font-size: 15px;
 }
 
 .item-row.done .item-name {

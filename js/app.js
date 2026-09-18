@@ -193,6 +193,7 @@
   function createChecklistModule(config) {
     const state = loadChecklistState(config.storageKey);
     const newItemInput = document.getElementById(config.newItemInputId);
+    const newUrlInput = document.getElementById(config.newUrlInputId);
     const addBtn = document.getElementById(config.addBtnId);
     const listEl = document.getElementById(config.listId);
     const progressEl = document.getElementById(config.progressId);
@@ -201,18 +202,22 @@
 
     function addItem() {
       const name = newItemInput.value.trim();
+      const url = newUrlInput.value.trim();
       if (!name) return;
-      state.items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name });
+      state.items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name, url });
       newItemInput.value = "";
+      newUrlInput.value = "";
       saveJSON(config.storageKey, state);
       render();
     }
     addBtn.addEventListener("click", addItem);
-    newItemInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        addItem();
-      }
+    [newItemInput, newUrlInput].forEach((el) => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addItem();
+        }
+      });
     });
 
     function toggleToday(itemId) {
@@ -251,7 +256,10 @@
           const done = !!todayLog[it.id];
           const li = document.createElement("li");
           li.className = `item-row ${done ? "done" : ""}`;
-          li.innerHTML = `<input type="checkbox" ${done ? "checked" : ""} data-id="${it.id}"><span class="item-name">${linkifyHtml(it.name)}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+          const nameHtml = it.url
+            ? `${escapeHtml(it.name)} <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
+            : linkifyHtml(it.name); // 旧データ（名前欄に直接URLが入っている）はそのままリンク化して表示
+          li.innerHTML = `<input type="checkbox" ${done ? "checked" : ""} data-id="${it.id}"><span class="item-name">${nameHtml}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
           listEl.appendChild(li);
         });
         listEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
@@ -276,6 +284,7 @@
   createChecklistModule({
     storageKey: "dietapp_workout_v1",
     newItemInputId: "workout-new-item",
+    newUrlInputId: "workout-new-url",
     addBtnId: "workout-add-btn",
     listId: "workout-item-list",
     progressId: "workout-progress",
@@ -286,6 +295,7 @@
   createChecklistModule({
     storageKey: "dietapp_massage_v1",
     newItemInputId: "massage-new-item",
+    newUrlInputId: "massage-new-url",
     addBtnId: "massage-add-btn",
     listId: "massage-item-list",
     progressId: "massage-progress",
