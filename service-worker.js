@@ -2,7 +2,7 @@
  * オフラインでもアプリを開けるようにするためのキャッシュ。
  * データ自体（localStorage）はキャッシュと無関係で、常に端末に残る。
  */
-const CACHE_NAME = "dietapp-cache-v2";
+const CACHE_NAME = "dietapp-cache-v3";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
@@ -27,11 +27,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ネットワークが使えるときは常に最新版を取りに行き、キャッシュはオフライン時の保険として使う
-// （キャッシュ優先にすると、コードを更新してもスマホ側がいつまでも古い版を表示し続けてしまうため）
+// ネットワークが使えるときは常に最新版を取りに行き、キャッシュはオフライン時の保険として使う。
+// fetch()はデフォルトだとブラウザ自体のHTTPキャッシュ（GitHub Pagesの保存期限指定）を
+// 見に行ってしまい「ネットワーク優先のつもりが実は古いキャッシュ」になりうるため、
+// cache: "reload" でHTTPキャッシュを読み飛ばして必ずサーバーへ取りに行かせる。
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    fetch(event.request)
+    fetch(new Request(event.request, { cache: "reload" }))
       .then((response) => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
