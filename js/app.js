@@ -395,25 +395,16 @@
     render();
   })();
 
-  // ---------- オフラインで開けるようにService Workerを登録 ----------
-  // iPhoneのホーム画面アプリはSafariのタブと別に休止状態から再開することがあり、
-  // その場合は再読み込みが起きず更新に気づけない。そこで復帰のたびに更新確認し、
-  // 新しい版が見つかったら自動でリロードする。
+  // ---------- Service Workerの後始末 ----------
+  // 以前オフライン対応のためにService Workerを使っていたが、ファイル単位で
+  // 新旧キャッシュが混在し「更新したのに一部だけ古いまま」になる不具合の温床になったため撤去した。
+  // 端末に登録済みの古いService Worker／キャッシュが残っていれば、ここで確実に消しておく。
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js").then((reg) => {
-        reg.update();
-        document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") reg.update();
-        });
-      }).catch(() => {});
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.unregister());
     });
-
-    let reloadedForUpdate = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloadedForUpdate) return;
-      reloadedForUpdate = true;
-      window.location.reload();
-    });
+  }
+  if (window.caches) {
+    caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
   }
 })();
