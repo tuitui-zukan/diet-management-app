@@ -276,6 +276,7 @@
     const budgetEl = document.getElementById("meal-budget");
     const inventoryEl = document.getElementById("meal-inventory");
     const planEl = document.getElementById("meal-plan");
+    const planLinksEl = document.getElementById("meal-plan-links");
     const daysEl = document.getElementById("meal-days");
     const actualCostEl = document.getElementById("meal-actual-cost");
     const diffEl = document.getElementById("meal-diff");
@@ -303,6 +304,29 @@
         diffEl.textContent = `予算オーバー：${Math.abs(diff).toLocaleString()}円`;
         diffEl.className = "diff-text over";
       }
+    }
+
+    // 献立欄に貼り付けたテキストからURLを見つけて、タップできるリンクにする
+    function extractUrls(text) {
+      // URLに使う文字だけを対象にする（日本語の助詞・句読点がスペースなしで
+      // 直後に続いても、URLの一部として誤って取り込まないようにするため）
+      const matches = text.match(/https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g) || [];
+      const cleaned = matches.map((u) => u.replace(/[)\]},.;:!?]+$/, ""));
+      return [...new Set(cleaned)];
+    }
+
+    function renderPlanLinks(text) {
+      const urls = extractUrls(text);
+      planLinksEl.innerHTML = "";
+      urls.forEach((url) => {
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.className = "link-chip";
+        a.textContent = url.includes("instagram.com") ? "📷 Instagramを開く" : `🔗 ${url}`;
+        planLinksEl.appendChild(a);
+      });
     }
 
     function renderDays(data) {
@@ -335,6 +359,7 @@
       actualCostEl.value = data.actualCost;
       renderDays(data);
       renderDiff(data);
+      renderPlanLinks(data.plan || "");
     }
 
     budgetEl.addEventListener("input", () => {
@@ -350,6 +375,7 @@
     planEl.addEventListener("input", () => {
       getWeekData(weekId).plan = planEl.value;
       saveJSON(LS_MEAL, mealState);
+      renderPlanLinks(planEl.value);
     });
     actualCostEl.addEventListener("input", () => {
       const data = getWeekData(weekId);
