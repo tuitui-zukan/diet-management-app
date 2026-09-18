@@ -370,9 +370,24 @@
   })();
 
   // ---------- オフラインで開けるようにService Workerを登録 ----------
+  // iPhoneのホーム画面アプリはSafariのタブと別に休止状態から再開することがあり、
+  // その場合は再読み込みが起きず更新に気づけない。そこで復帰のたびに更新確認し、
+  // 新しい版が見つかったら自動でリロードする。
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js").catch(() => {});
+      navigator.serviceWorker.register("service-worker.js").then((reg) => {
+        reg.update();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") reg.update();
+        });
+      }).catch(() => {});
+    });
+
+    let reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadedForUpdate) return;
+      reloadedForUpdate = true;
+      window.location.reload();
     });
   }
 })();
