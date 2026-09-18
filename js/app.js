@@ -125,6 +125,35 @@
     }[c]));
   }
 
+  // URLに使う文字だけを対象にする（日本語の助詞・句読点がスペースなしで
+  // 直後に続いても、URLの一部として誤って取り込まないようにするため）
+  const URL_PATTERN = /https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+
+  function cleanTrailingPunctuation(url) {
+    return url.replace(/[)\]},.;:!?]+$/, "");
+  }
+
+  // テキスト中のURLを見つけて、タップできる<a>タグ入りのHTMLに変換する
+  // （innerHTMLに差し込む前提。それ以外の部分はescapeHtmlでエスケープ済み）
+  function linkifyHtml(text) {
+    const pattern = new RegExp(URL_PATTERN);
+    let lastIndex = 0;
+    let html = "";
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const rawUrl = match[0];
+      const url = cleanTrailingPunctuation(rawUrl);
+      const trailing = rawUrl.slice(url.length);
+      html += escapeHtml(text.slice(lastIndex, match.index));
+      const label = url.includes("instagram.com") ? "📷 Instagramを開く" : url;
+      html += `<a href="${url}" target="_blank" rel="noopener" class="inline-link">${escapeHtml(label)}</a>`;
+      html += escapeHtml(trailing);
+      lastIndex = match.index + rawUrl.length;
+    }
+    html += escapeHtml(text.slice(lastIndex));
+    return html;
+  }
+
   // ---------- タブ切り替え ----------
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -222,7 +251,7 @@
           const done = !!todayLog[it.id];
           const li = document.createElement("li");
           li.className = `item-row ${done ? "done" : ""}`;
-          li.innerHTML = `<input type="checkbox" ${done ? "checked" : ""} data-id="${it.id}"><span class="item-name">${escapeHtml(it.name)}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+          li.innerHTML = `<input type="checkbox" ${done ? "checked" : ""} data-id="${it.id}"><span class="item-name">${linkifyHtml(it.name)}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
           listEl.appendChild(li);
         });
         listEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
@@ -307,11 +336,10 @@
     }
 
     // 献立欄に貼り付けたテキストからURLを見つけて、タップできるリンクにする
+    // （textareaは中の文字をHTMLとして表示できないので、下に別枠でボタンを出す）
     function extractUrls(text) {
-      // URLに使う文字だけを対象にする（日本語の助詞・句読点がスペースなしで
-      // 直後に続いても、URLの一部として誤って取り込まないようにするため）
-      const matches = text.match(/https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g) || [];
-      const cleaned = matches.map((u) => u.replace(/[)\]},.;:!?]+$/, ""));
+      const matches = text.match(URL_PATTERN) || [];
+      const cleaned = matches.map(cleanTrailingPunctuation);
       return [...new Set(cleaned)];
     }
 

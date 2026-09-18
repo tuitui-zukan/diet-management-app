@@ -186,6 +186,12 @@ textarea:focus, input:focus {
   word-break: break-word;
 }
 
+.inline-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .item-row.done .item-name {
   color: var(--color-sub);
   text-decoration: line-through;
