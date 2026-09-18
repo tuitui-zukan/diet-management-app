@@ -27,13 +27,17 @@
     <h2>筋トレメニュー</h2>
 
     <div class="card">
-      <label for="workout-menu">今週のメニュー</label>
-      <textarea id="workout-menu" rows="5" placeholder="例）スクワット20回×3セット、腹筋15回×3セット..."></textarea>
+      <label for="workout-new-item">メニューを追加</label>
+      <div class="add-row">
+        <input type="text" id="workout-new-item" placeholder="例）スクワット20回×3セット">
+        <button id="workout-add-btn" class="add-btn">追加</button>
+      </div>
     </div>
 
-    <div class="card check-card">
-      <button id="workout-check-btn" class="check-btn">今日やった ✓</button>
-      <p id="workout-today-status" class="status-text"></p>
+    <div class="card">
+      <p class="card-label">今日のチェック</p>
+      <ul id="workout-item-list" class="item-list"></ul>
+      <p id="workout-progress" class="status-text"></p>
     </div>
 
     <div class="card">
@@ -48,13 +52,17 @@
     <h2>小顔マッサージ</h2>
 
     <div class="card">
-      <label for="massage-memo">やり方メモ（任意）</label>
-      <textarea id="massage-memo" rows="4" placeholder="例）リンパを耳下から鎖骨に流す、頬を上に持ち上げる..."></textarea>
+      <label for="massage-new-item">メニューを追加</label>
+      <div class="add-row">
+        <input type="text" id="massage-new-item" placeholder="例）耳下から鎖骨にリンパを流す">
+        <button id="massage-add-btn" class="add-btn">追加</button>
+      </div>
     </div>
 
-    <div class="card check-card">
-      <button id="massage-check-btn" class="check-btn">今日やった ✓</button>
-      <p id="massage-today-status" class="status-text"></p>
+    <div class="card">
+      <p class="card-label">今日のチェック</p>
+      <ul id="massage-item-list" class="item-list"></ul>
+      <p id="massage-progress" class="status-text"></p>
     </div>
 
     <div class="card">

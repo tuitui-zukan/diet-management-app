@@ -94,31 +94,92 @@ textarea:focus, input:focus {
   margin: 6px 0 0;
 }
 
-.check-card {
-  text-align: center;
-}
-
-.check-btn {
-  width: 100%;
-  padding: 16px;
-  font-size: 17px;
-  font-weight: 600;
-  border: none;
-  border-radius: 12px;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  transition: background 0.15s, color 0.15s;
-}
-
-.check-btn.done {
-  background: var(--color-primary);
-  color: #fff;
-}
-
 .status-text {
   margin: 10px 0 0;
   font-size: 13px;
   color: var(--color-sub);
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-row input[type="text"] {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  background: #fafafa;
+  color: var(--color-text);
+}
+
+.add-row input[type="text"]:focus {
+  outline: 2px solid var(--color-primary);
+  background: #fff;
+}
+
+.add-btn {
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.item-row:last-child {
+  border-bottom: none;
+}
+
+.item-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.item-row .item-name {
+  flex: 1;
+  font-size: 15px;
+  word-break: break-word;
+}
+
+.item-row.done .item-name {
+  color: var(--color-sub);
+  text-decoration: line-through;
+}
+
+.item-delete {
+  border: none;
+  background: none;
+  color: var(--color-sub);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: var(--color-sub);
+  padding: 8px 0;
 }
 
 .week-dots {

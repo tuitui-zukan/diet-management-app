@@ -104,19 +104,25 @@
     return `${start.getUTCMonth() + 1}/${start.getUTCDate()} 〜 ${end.getUTCMonth() + 1}/${end.getUTCDate()}`;
   }
 
-  function renderWeekDots(container, log) {
+  function renderWeekDots(container, isDoneFn) {
     container.innerHTML = "";
     const dows = ["日", "月", "火", "水", "木", "金", "土"];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const iso = localISODateString(d);
-      const done = !!log[iso];
+      const done = isDoneFn(iso);
       const wrap = document.createElement("div");
       wrap.className = "day-dot";
       wrap.innerHTML = `<div class="dot ${done ? "done" : ""}">${done ? "✓" : ""}</div><div class="dow">${dows[d.getDay()]}</div>`;
       container.appendChild(wrap);
     }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
   }
 
   // ---------- タブ切り替え ----------
@@ -130,57 +136,130 @@
   }
 
   // ---------- 筋トレ／マッサージ共通モジュール ----------
-  // どちらも「メモ欄＋今日やったチェック＋直近7日間の実績」という同じ構造なので使い回す
-  function createDailyCheckModule(config) {
-    const state = loadJSON(config.storageKey, { text: "", log: {} });
-    const textEl = document.getElementById(config.textFieldId);
-    const btnEl = document.getElementById(config.checkBtnId);
-    const statusEl = document.getElementById(config.statusId);
+  // どちらも「メニュー項目を追加→毎日項目ごとにチェック」という同じ構造なので使い回す
+
+  // 旧バージョン（自由記述＋1日1チェック）のデータが残っていれば、
+  // 各行を項目として移行し、チェック済みだった日は全項目チェック済み扱いにする
+  function loadChecklistState(storageKey) {
+    const raw = loadJSON(storageKey, null);
+    if (!raw) return { items: [], log: {} };
+    if (Array.isArray(raw.items)) return raw;
+
+    const lines = (raw.text || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    const items = lines.map((name, i) => ({ id: `migrated_${i}`, name }));
+    const log = {};
+    if (items.length > 0) {
+      Object.keys(raw.log || {}).forEach((date) => {
+        if (raw.log[date]) {
+          log[date] = {};
+          items.forEach((it) => { log[date][it.id] = true; });
+        }
+      });
+    }
+    const migrated = { items, log };
+    saveJSON(storageKey, migrated);
+    return migrated;
+  }
+
+  function createChecklistModule(config) {
+    const state = loadChecklistState(config.storageKey);
+    const newItemInput = document.getElementById(config.newItemInputId);
+    const addBtn = document.getElementById(config.addBtnId);
+    const listEl = document.getElementById(config.listId);
+    const progressEl = document.getElementById(config.progressId);
     const dotsEl = document.getElementById(config.weekDotsId);
     const totalEl = document.getElementById(config.totalId);
 
-    textEl.value = state.text || "";
-    textEl.addEventListener("input", () => {
-      state.text = textEl.value;
-      saveJSON(config.storageKey, state);
-    });
-
-    btnEl.addEventListener("click", () => {
-      const today = todayISO();
-      if (state.log[today]) delete state.log[today];
-      else state.log[today] = true;
+    function addItem() {
+      const name = newItemInput.value.trim();
+      if (!name) return;
+      state.items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name });
+      newItemInput.value = "";
       saveJSON(config.storageKey, state);
       render();
+    }
+    addBtn.addEventListener("click", addItem);
+    newItemInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addItem();
+      }
     });
+
+    function toggleToday(itemId) {
+      const today = todayISO();
+      if (!state.log[today]) state.log[today] = {};
+      if (state.log[today][itemId]) delete state.log[today][itemId];
+      else state.log[today][itemId] = true;
+      saveJSON(config.storageKey, state);
+      render();
+    }
+
+    function deleteItem(itemId) {
+      state.items = state.items.filter((it) => it.id !== itemId);
+      saveJSON(config.storageKey, state);
+      render();
+    }
+
+    function isDayComplete(dateISO) {
+      if (state.items.length === 0) return false;
+      const dayLog = state.log[dateISO] || {};
+      return state.items.every((it) => !!dayLog[it.id]);
+    }
 
     function render() {
       const today = todayISO();
-      const done = !!state.log[today];
-      btnEl.classList.toggle("done", done);
-      btnEl.textContent = done ? "今日やった ✓（完了）" : "今日やった ✓";
-      statusEl.textContent = done ? "今日は実施済みです" : "まだ未実施です";
-      renderWeekDots(dotsEl, state.log);
-      const total = Object.values(state.log).filter(Boolean).length;
-      totalEl.textContent = `これまでの実施日数：${total}日`;
+      const todayLog = state.log[today] || {};
+
+      listEl.innerHTML = "";
+      if (state.items.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty-hint";
+        li.textContent = "メニューを追加してください";
+        listEl.appendChild(li);
+      } else {
+        state.items.forEach((it) => {
+          const done = !!todayLog[it.id];
+          const li = document.createElement("li");
+          li.className = `item-row ${done ? "done" : ""}`;
+          li.innerHTML = `<input type="checkbox" ${done ? "checked" : ""} data-id="${it.id}"><span class="item-name">${escapeHtml(it.name)}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+          listEl.appendChild(li);
+        });
+        listEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener("change", () => toggleToday(cb.dataset.id));
+        });
+        listEl.querySelectorAll(".item-delete").forEach((btn) => {
+          btn.addEventListener("click", () => deleteItem(btn.dataset.id));
+        });
+      }
+
+      const doneCount = state.items.filter((it) => !!todayLog[it.id]).length;
+      progressEl.textContent = state.items.length ? `今日：${doneCount}/${state.items.length} 完了` : "";
+
+      renderWeekDots(dotsEl, (dateISO) => isDayComplete(dateISO));
+      const totalDays = Object.keys(state.log).filter((d) => isDayComplete(d)).length;
+      totalEl.textContent = `全メニュー達成日数：${totalDays}日`;
     }
 
     render();
   }
 
-  createDailyCheckModule({
+  createChecklistModule({
     storageKey: "dietapp_workout_v1",
-    textFieldId: "workout-menu",
-    checkBtnId: "workout-check-btn",
-    statusId: "workout-today-status",
+    newItemInputId: "workout-new-item",
+    addBtnId: "workout-add-btn",
+    listId: "workout-item-list",
+    progressId: "workout-progress",
     weekDotsId: "workout-week-dots",
     totalId: "workout-total",
   });
 
-  createDailyCheckModule({
+  createChecklistModule({
     storageKey: "dietapp_massage_v1",
-    textFieldId: "massage-memo",
-    checkBtnId: "massage-check-btn",
-    statusId: "massage-today-status",
+    newItemInputId: "massage-new-item",
+    addBtnId: "massage-add-btn",
+    listId: "massage-item-list",
+    progressId: "massage-progress",
     weekDotsId: "massage-week-dots",
     totalId: "massage-total",
   });
