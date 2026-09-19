@@ -303,6 +303,18 @@
     totalId: "massage-total",
   });
 
+  // ---------- 常備調味料・食材（週をまたいでリセットされない） ----------
+  (function initPantry() {
+    const LS_PANTRY = "dietapp_pantry_v1";
+    const pantryState = loadJSON(LS_PANTRY, { text: "" });
+    const pantryEl = document.getElementById("meal-pantry");
+    pantryEl.value = pantryState.text || "";
+    pantryEl.addEventListener("input", () => {
+      pantryState.text = pantryEl.value;
+      saveJSON(LS_PANTRY, pantryState);
+    });
+  })();
+
   // ---------- 献立モジュール ----------
   (function initMeal() {
     const LS_MEAL = "dietapp_meal_v1";
