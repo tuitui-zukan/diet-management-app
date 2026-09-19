@@ -94,6 +94,34 @@ textarea:focus, input:focus {
   margin: 6px 0 0;
 }
 
+.primary-btn {
+  width: 100%;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.prompt-result {
+  margin-top: 12px;
+}
+
+.prompt-result textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fafafa;
+  color: var(--color-text);
+  margin-bottom: 8px;
+  resize: vertical;
+}
+
 .link-chips {
   display: flex;
   flex-wrap: wrap;

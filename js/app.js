@@ -22,9 +22,9 @@
   }
 
   let saveIndicatorTimer = null;
-  function showSaveIndicator() {
+  function showSaveIndicator(message) {
     const el = document.getElementById("save-indicator");
-    el.textContent = "保存しました";
+    el.textContent = message || "保存しました";
     el.classList.add("show");
     clearTimeout(saveIndicatorTimer);
     saveIndicatorTimer = setTimeout(() => el.classList.remove("show"), 900);
@@ -331,6 +331,10 @@
     const daysEl = document.getElementById("meal-days");
     const actualCostEl = document.getElementById("meal-actual-cost");
     const diffEl = document.getElementById("meal-diff");
+    const promptBtn = document.getElementById("meal-prompt-btn");
+    const promptResultEl = document.getElementById("meal-prompt-result");
+    const promptTextEl = document.getElementById("meal-prompt-text");
+    const promptCopyBtn = document.getElementById("meal-prompt-copy-btn");
 
     function getWeekData(id) {
       if (!mealState.weeks[id]) {
@@ -356,6 +360,44 @@
         diffEl.className = "diff-text over";
       }
     }
+
+    // 常備品・在庫・予算から、Claudeにそのまま渡せる依頼文を組み立てる
+    function buildPrompt() {
+      const data = getWeekData(weekId);
+      const pantryState = loadJSON("dietapp_pantry_v1", { text: "" });
+      const budgetText = data.budget ? `${Number(data.budget).toLocaleString()}円` : "指定なし";
+      const pantryText = (pantryState.text || "").trim() || "（特になし）";
+      const inventoryText = (data.inventory || "").trim() || "（特になし）";
+
+      return `以下の条件で、ダイエット向け・栄養バランスを考えた1週間分の献立を作ってください。
+
+【予算】${budgetText}
+【常備している調味料・食材】
+${pantryText}
+
+【今週の冷蔵庫の在庫（優先的に使い切りたいもの）】
+${inventoryText}
+
+条件：
+- カロリーと栄養バランス（PFCバランス）を意識してください
+- 予算内に収めてください
+- 上記の在庫の食材を優先的に使い、余らせないようにしてください
+- 保存してあるインスタの投稿のスクリーンショットも一緒に渡すので、使えそうなものがあれば取り入れてください`;
+    }
+
+    promptBtn.addEventListener("click", () => {
+      promptTextEl.value = buildPrompt();
+      promptResultEl.classList.remove("hidden");
+    });
+
+    promptCopyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(promptTextEl.value);
+        showSaveIndicator("コピーしました");
+      } catch (e) {
+        promptTextEl.select();
+      }
+    });
 
     // 献立欄に貼り付けたテキストからURLを見つけて、タップできるリンクにする
     // （textareaは中の文字をHTMLとして表示できないので、下に別枠でボタンを出す）

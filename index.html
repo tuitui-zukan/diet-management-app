@@ -106,6 +106,15 @@
     </div>
 
     <div class="card">
+      <button id="meal-prompt-btn" class="primary-btn">Claudeへの依頼文を作る</button>
+      <div id="meal-prompt-result" class="prompt-result hidden">
+        <textarea id="meal-prompt-text" rows="10" readonly></textarea>
+        <button id="meal-prompt-copy-btn" class="add-btn">コピーする</button>
+        <p class="hint">↑コピーしてiPhoneのClaudeアプリに貼り付け、インスタのスクショも一緒に渡してください</p>
+      </div>
+    </div>
+
+    <div class="card">
       <label for="meal-plan">今週の献立（Claudeから受け取った内容を貼り付け）</label>
       <textarea id="meal-plan" rows="8" placeholder="Claudeが作成した1週間の献立をここに貼り付け（インスタのURLも一緒に貼ればタップ可能なリンクになります）"></textarea>
       <div id="meal-plan-links" class="link-chips"></div>
