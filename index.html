@@ -144,6 +144,27 @@
     </div>
   </section>
 
+  <!-- 設定タブ -->
+  <section id="tab-settings" class="tab-panel hidden">
+    <h2>データのバックアップ</h2>
+
+    <div class="card">
+      <button id="export-btn" class="primary-btn">データをエクスポート</button>
+      <div id="export-result" class="prompt-result hidden">
+        <textarea id="export-text" rows="10" readonly></textarea>
+        <button id="export-copy-btn" class="add-btn">コピーする</button>
+        <p class="hint">↑このテキストをメモアプリなどに保存しておくと、復元に使えます</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="import-text">データを復元（インポート）</label>
+      <textarea id="import-text" rows="10" placeholder="エクスポートしたテキストをここに貼り付け"></textarea>
+      <button id="import-btn" class="primary-btn">このデータで復元する</button>
+      <p class="hint">↑現在のデータは上書きされます。iPhoneのホーム画面アプリとSafariのタブは保存場所が別なので、片方で入力した内容をもう片方に移したいときにも使えます</p>
+    </div>
+  </section>
+
 </main>
 
 <nav class="tab-bar">
@@ -155,6 +176,9 @@
   </button>
   <button class="tab-btn" data-tab="meal">
     <span class="tab-icon">🍱</span><span>献立</span>
+  </button>
+  <button class="tab-btn" data-tab="settings">
+    <span class="tab-icon">⚙️</span><span>設定</span>
   </button>
 </nav>
 

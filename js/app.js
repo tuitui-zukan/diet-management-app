@@ -765,6 +765,76 @@ ${pantryText}
     render();
   })();
 
+  // ---------- 設定タブ：データのエクスポート/インポート ----------
+  // iPhoneでは「ホーム画面のアプリ」と「Safariの通常タブ」で保存場所が分かれてしまうため、
+  // データをテキストで書き出し・読み込みできるようにして、移行やバックアップに使えるようにする
+  (function initSettings() {
+    const DATA_KEYS = [
+      "dietapp_workout_v1",
+      "dietapp_massage_v1",
+      "dietapp_pantry_v1",
+      "dietapp_pantry_v2",
+      "dietapp_meal_v1",
+      "dietapp_menu_library_v1",
+      "dietapp_meal_defaults_v1",
+    ];
+
+    const exportBtn = document.getElementById("export-btn");
+    const exportResultEl = document.getElementById("export-result");
+    const exportTextEl = document.getElementById("export-text");
+    const exportCopyBtn = document.getElementById("export-copy-btn");
+    const importTextEl = document.getElementById("import-text");
+    const importBtn = document.getElementById("import-btn");
+
+    function buildExportData() {
+      const data = {};
+      DATA_KEYS.forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (raw !== null) data[key] = raw;
+      });
+      return JSON.stringify({ exportedAt: new Date().toISOString(), data }, null, 2);
+    }
+
+    exportBtn.addEventListener("click", () => {
+      exportTextEl.value = buildExportData();
+      exportResultEl.classList.remove("hidden");
+    });
+
+    exportCopyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(exportTextEl.value);
+        showSaveIndicator("コピーしました");
+      } catch (e) {
+        exportTextEl.select();
+      }
+    });
+
+    importBtn.addEventListener("click", () => {
+      const raw = importTextEl.value.trim();
+      if (!raw) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        alert("読み込めませんでした。エクスポートしたテキストをそのまま貼り付けてください。");
+        return;
+      }
+      if (!parsed || typeof parsed.data !== "object") {
+        alert("読み込めませんでした。エクスポートしたテキストをそのまま貼り付けてください。");
+        return;
+      }
+      const ok = confirm("現在のデータを、貼り付けた内容で上書きします。よろしいですか？");
+      if (!ok) return;
+      Object.keys(parsed.data).forEach((key) => {
+        if (DATA_KEYS.includes(key)) {
+          localStorage.setItem(key, parsed.data[key]);
+        }
+      });
+      alert("復元しました。画面を再読み込みします。");
+      window.location.reload();
+    });
+  })();
+
   // ---------- Service Workerの後始末 ----------
   // 以前オフライン対応のためにService Workerを使っていたが、ファイル単位で
   // 新旧キャッシュが混在し「更新したのに一部だけ古いまま」になる不具合の温床になったため撤去した。
