@@ -912,6 +912,20 @@ ${pantryText}
       });
 
       const data = getWeekData(weekId);
+
+      // 今回の貼り付けが対象にする曜日・食事枠は、先に空にしてから入れ直す
+      // （前回までに貼り付けた古いメニューが残り続けてしまうのを防ぐため）
+      const touchedSlots = new Set();
+      parsed.forEach(({ dow, slot }) => {
+        const iso = dowToIso[dow];
+        const slotKey = SLOT_LABEL_TO_KEY[slot];
+        if (iso && slotKey) touchedSlots.add(`${iso}|${slotKey}`);
+      });
+      touchedSlots.forEach((key) => {
+        const [iso, slotKey] = key.split("|");
+        getDaySlots(data, iso)[slotKey].menuIds = [];
+      });
+
       let addedCount = 0;
       parsed.forEach(({ dow, slot, name }) => {
         const iso = dowToIso[dow];
