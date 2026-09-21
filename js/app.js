@@ -154,6 +154,41 @@
     return html;
   }
 
+  // どの項目の「作り方」を開いているか（アプリ全体で共有。再描画をまたいで開閉状態を保つため）
+  const expandedRecipeIds = new Set();
+
+  // 「名前＋任意のURLリンク＋任意の作り方開閉ボタン」を持つitem-row1件分のHTMLを組み立てる
+  function buildItemRowHtml(it) {
+    const nameHtml = it.url
+      ? `${escapeHtml(it.name)} <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
+      : linkifyHtml(it.name);
+    const hasRecipe = !!it.recipe;
+    const isExpanded = hasRecipe && expandedRecipeIds.has(it.id);
+    const toggleHtml = hasRecipe
+      ? `<button type="button" class="recipe-toggle-btn" data-id="${it.id}" aria-label="作り方を表示">${isExpanded ? "▲" : "📋"}</button>`
+      : "";
+    const rowHtml = `<span class="item-name">${nameHtml}</span>${toggleHtml}<button type="button" class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+    const detailHtml = hasRecipe
+      ? `<div class="recipe-detail"${isExpanded ? "" : " hidden"}>${escapeHtml(it.recipe)}</div>`
+      : "";
+    return `<div class="item-row">${rowHtml}</div>${detailHtml}`;
+  }
+
+  // buildItemRowHtmlで作ったリストに、削除ボタンと作り方トグルの動作をまとめて仕込む
+  function bindItemRowEvents(listEl, { onDelete, onToggleRecipe }) {
+    listEl.querySelectorAll(".item-delete").forEach((btn) => {
+      btn.addEventListener("click", () => onDelete(btn.dataset.id));
+    });
+    listEl.querySelectorAll(".recipe-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.id;
+        if (expandedRecipeIds.has(id)) expandedRecipeIds.delete(id);
+        else expandedRecipeIds.add(id);
+        onToggleRecipe();
+      });
+    });
+  }
+
   // ---------- タブ切り替え ----------
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -355,17 +390,11 @@
         listEl.appendChild(li);
       } else {
         items.forEach((it) => {
-          const nameHtml = it.url
-            ? `${escapeHtml(it.name)} <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
-            : linkifyHtml(it.name);
           const li = document.createElement("li");
-          li.className = "item-row";
-          li.innerHTML = `<span class="item-name">${nameHtml}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+          li.innerHTML = buildItemRowHtml(it);
           listEl.appendChild(li);
         });
-        listEl.querySelectorAll(".item-delete").forEach((btn) => {
-          btn.addEventListener("click", () => deleteItem(btn.dataset.id));
-        });
+        bindItemRowEvents(listEl, { onDelete: deleteItem, onToggleRecipe: render });
       }
       if (config.onRender) config.onRender();
     }
@@ -546,17 +575,16 @@
               const menu = menuLibraryState.items.find((m) => m.id === menuId);
               if (!menu) return;
               const li = document.createElement("li");
-              li.className = "item-row";
-              const linkHtml = menu.url
-                ? ` <a href="${escapeHtml(menu.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
-                : "";
-              li.innerHTML = `<span class="item-name">${escapeHtml(menu.name)}${linkHtml}</span><button type="button" class="item-delete" aria-label="削除">×</button>`;
-              li.querySelector(".item-delete").addEventListener("click", () => {
+              li.innerHTML = buildItemRowHtml(menu);
+              itemsList.appendChild(li);
+            });
+            bindItemRowEvents(itemsList, {
+              onDelete: (menuId) => {
                 slotData.menuIds = slotData.menuIds.filter((id) => id !== menuId);
                 saveJSON(LS_MEAL, mealState);
                 renderMealGrid();
-              });
-              itemsList.appendChild(li);
+              },
+              onToggleRecipe: renderMealGrid,
             });
           }
           slotBlock.appendChild(itemsList);
@@ -626,17 +654,16 @@
             const menu = menuLibraryState.items.find((m) => m.id === menuId);
             if (!menu) return;
             const li = document.createElement("li");
-            li.className = "item-row";
-            const linkHtml = menu.url
-              ? ` <a href="${escapeHtml(menu.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
-              : "";
-            li.innerHTML = `<span class="item-name">${escapeHtml(menu.name)}${linkHtml}</span><button type="button" class="item-delete" aria-label="削除">×</button>`;
-            li.querySelector(".item-delete").addEventListener("click", () => {
+            li.innerHTML = buildItemRowHtml(menu);
+            itemsList.appendChild(li);
+          });
+          bindItemRowEvents(itemsList, {
+            onDelete: (menuId) => {
               mealDefaults[slotKey] = mealDefaults[slotKey].filter((id) => id !== menuId);
               saveMealDefaults();
               renderMealDefaults();
-            });
-            itemsList.appendChild(li);
+            },
+            onToggleRecipe: renderMealDefaults,
           });
         }
         slotBlock.appendChild(itemsList);
@@ -767,22 +794,38 @@ ${pantryText}
         .trim();
     }
 
-    // 「① 鶏むね甘辛そぼろ（冷蔵4日）」のような見出しから、①→料理名の対応表を作る
-    // （表の中で①②③④のように番号だけで参照されるケースに対応するため）
-    function buildNumberedRecipeMap(text) {
-      const map = {};
-      const pattern = /^#{1,6}\s*([①②③④⑤⑥⑦⑧⑨⑩])\s*(.+)$/;
+    // テキストをMarkdownの見出し単位のブロックに分割する（本文はレシピとして使う）
+    function splitIntoHeadingBlocks(text) {
+      const blocks = [];
+      let current = null;
       text.split("\n").forEach((line) => {
-        const m = line.trim().match(pattern);
+        if (/^#{1,6}\s*\S/.test(line)) {
+          if (current) blocks.push(current);
+          current = { stripped: stripHeadingNoise(line), bodyLines: [] };
+        } else if (current) {
+          current.bodyLines.push(line);
+        }
+      });
+      if (current) blocks.push(current);
+      return blocks.map((b) => ({ stripped: b.stripped, body: b.bodyLines.join("\n").trim() }));
+    }
+
+    // 「① 鶏むね甘辛そぼろ（冷蔵4日）」のような見出しから、①→{料理名,作り方}の対応表を作る
+    // （表の中で①②③④のように番号だけで参照されるケースに対応するため）
+    function buildNumberedRecipeMap(headingBlocks) {
+      const map = {};
+      const pattern = /^([①②③④⑤⑥⑦⑧⑨⑩])\s*(.+)$/;
+      headingBlocks.forEach((block) => {
+        const m = block.stripped.match(pattern);
         if (m) {
           const name = m[2].replace(/[（(].*$/, "").trim();
-          if (name) map[m[1]] = name;
+          if (name) map[m[1]] = { name, recipe: block.body };
         }
       });
       return map;
     }
 
-    // 表のマス目（例：「①そぼろ＋ごはん＋②スープ」）を個別の料理名に分割する
+    // 表のマス目（例：「①そぼろ＋ごはん＋②スープ」）を個別の{名前,作り方}に分割する
     function splitMealCell(raw, numberedRecipeMap) {
       return raw
         .split(/[＋+、]/)
@@ -790,15 +833,16 @@ ${pantryText}
         .filter(Boolean)
         .map((fragment) => {
           const m = fragment.match(/^([①②③④⑤⑥⑦⑧⑨⑩])(.*)$/);
-          if (!m) return fragment;
-          if (numberedRecipeMap[m[1]]) return numberedRecipeMap[m[1]];
-          return m[2].trim() || fragment;
+          if (!m) return { name: fragment, recipe: "" };
+          const resolved = numberedRecipeMap[m[1]];
+          if (resolved) return resolved;
+          return { name: m[2].trim() || fragment, recipe: "" };
         })
-        .filter(Boolean);
+        .filter((x) => x.name);
     }
 
     // Markdownの表形式（| 曜日 | 朝 | 昼 | 夜 |）を解析する
-    function parseMealPlanTable(text, addResult) {
+    function parseMealPlanTable(text, numberedRecipeMap, addResult) {
       const tableLines = text
         .split("\n")
         .map((l) => l.trim())
@@ -830,8 +874,6 @@ ${pantryText}
       });
       if (dowColumn === -1 || Object.keys(slotColumns).length === 0) return;
 
-      const numberedRecipeMap = buildNumberedRecipeMap(text);
-
       for (let i = headerIdx + 1; i < tableLines.length; i += 1) {
         const cells = splitRow(tableLines[i]);
         if (cells.every((c) => /^-+$/.test(c))) continue; // 区切り行はスキップ
@@ -843,7 +885,7 @@ ${pantryText}
         Object.keys(slotColumns).forEach((slotLabel) => {
           const raw = (cells[slotColumns[slotLabel]] || "").replace(/\*/g, "").trim();
           if (!raw) return;
-          splitMealCell(raw, numberedRecipeMap).forEach((name) => addResult(dow, slotLabel, name));
+          splitMealCell(raw, numberedRecipeMap).forEach(({ name, recipe }) => addResult(dow, slotLabel, name, recipe));
         });
       }
     }
@@ -851,49 +893,53 @@ ${pantryText}
     function parseMealPlanText(text) {
       const results = [];
       const seen = new Set();
-      function addResult(dow, slot, name) {
+      function addResult(dow, slot, name, recipe) {
         const key = `${dow}|${slot}|${name}`;
         if (seen.has(key) || !name) return;
         seen.add(key);
-        results.push({ dow, slot, name });
+        results.push({ dow, slot, name, recipe: recipe || "" });
       }
 
       const lines = text.split("\n");
 
-      // パターン1：「月曜,朝食,料理名」の1行完結フォーマット
+      // パターン1：「月曜,朝食,料理名」の1行完結フォーマット（作り方の記載はなし）
       lines.forEach((line) => {
         const m = line.trim().match(MEAL_LINE_PATTERN);
-        if (m) addResult(m[1], m[2], m[3].trim());
+        if (m) addResult(m[1], m[2], m[3].trim(), "");
       });
 
-      // パターン2：見出しで曜日→食事の順に並んでいる形式
+      const headingBlocks = splitIntoHeadingBlocks(text);
+
+      // パターン2：見出しで曜日→食事の順に並んでいる形式（見出し直後の本文を作り方として取得）
       let currentDow = null;
-      lines.forEach((line) => {
-        const stripped = stripHeadingNoise(line);
-        const dowMatch = stripped.match(DOW_HEADING_PATTERN);
+      headingBlocks.forEach((block) => {
+        const dowMatch = block.stripped.match(DOW_HEADING_PATTERN);
         if (dowMatch) {
           currentDow = dowMatch[1];
           return;
         }
         if (!currentDow) return;
-        const mealMatch = stripped.match(MEAL_HEADING_PATTERN);
+        const mealMatch = block.stripped.match(MEAL_HEADING_PATTERN);
         if (mealMatch) {
           const slot = normalizeSlotLabel(mealMatch[1]);
-          if (slot) addResult(currentDow, slot, mealMatch[2].trim());
+          if (slot) addResult(currentDow, slot, mealMatch[2].trim(), block.body);
         }
       });
 
-      // パターン3：Markdownの表形式（| 曜日 | 朝 | 昼 | 夜 |）
-      parseMealPlanTable(text, addResult);
+      // パターン3：Markdownの表形式（| 曜日 | 朝 | 昼 | 夜 |）。①②③④は見出しから作り方ごと解決
+      const numberedRecipeMap = buildNumberedRecipeMap(headingBlocks);
+      parseMealPlanTable(text, numberedRecipeMap, addResult);
 
       return results;
     }
 
-    function findOrCreateMenu(name) {
+    function findOrCreateMenu(name, recipe) {
       let menu = menuLibraryState.items.find((m) => m.name === name);
       if (!menu) {
-        menu = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name, url: "" };
+        menu = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name, url: "", recipe: recipe || "" };
         menuLibraryState.items.push(menu);
+      } else if (recipe && recipe !== menu.recipe) {
+        menu.recipe = recipe;
       }
       return menu;
     }
@@ -927,12 +973,12 @@ ${pantryText}
       });
 
       let addedCount = 0;
-      parsed.forEach(({ dow, slot, name }) => {
+      parsed.forEach(({ dow, slot, name, recipe }) => {
         const iso = dowToIso[dow];
         const slotKey = SLOT_LABEL_TO_KEY[slot];
         if (!iso || !slotKey) return;
         const daySlots = getDaySlots(data, iso);
-        const menu = findOrCreateMenu(name);
+        const menu = findOrCreateMenu(name, recipe);
         if (!daySlots[slotKey].menuIds.includes(menu.id)) {
           daySlots[slotKey].menuIds.push(menu.id);
           addedCount += 1;
