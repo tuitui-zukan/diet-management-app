@@ -317,25 +317,47 @@ textarea:focus, input:focus {
   color: var(--color-text);
 }
 
-.meal-slot-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+.meal-slot-block {
+  margin-bottom: 14px;
 }
 
-.meal-slot-row:last-child {
+.meal-slot-block:last-child {
   margin-bottom: 0;
 }
 
+.meal-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
 .meal-slot-label {
-  width: 40px;
-  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-sub);
+}
+
+.meal-slot-done {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: var(--color-sub);
 }
 
-.meal-slot-row select {
+.meal-slot-done input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.meal-slot-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.meal-slot-add-row select {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--color-border);
@@ -346,14 +368,19 @@ textarea:focus, input:focus {
   color: var(--color-text);
 }
 
-.meal-slot-row input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
+.meal-slot-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.meal-slot-row .inline-link-icon {
-  flex-shrink: 0;
+.meal-slot-items .item-row {
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.meal-slot-items .empty-hint {
+  padding: 4px 0;
 }
 
 .diff-text {

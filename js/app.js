@@ -435,7 +435,17 @@
       if (!isValid) {
         data.days[dateISO] = {};
         MEAL_SLOTS.forEach(([key]) => {
-          data.days[dateISO][key] = { menuId: "", done: false };
+          data.days[dateISO][key] = { menuIds: [], done: false };
+        });
+      } else {
+        // 旧バージョン（1食1メニューまでの形）からの移行
+        MEAL_SLOTS.forEach(([key]) => {
+          const slot = existing[key];
+          if (!slot || typeof slot !== "object") {
+            existing[key] = { menuIds: [], done: false };
+          } else if (!Array.isArray(slot.menuIds)) {
+            existing[key] = { menuIds: slot.menuId ? [slot.menuId] : [], done: !!slot.done };
+          }
         });
       }
       return data.days[dateISO];
@@ -472,63 +482,92 @@
 
         MEAL_SLOTS.forEach(([slotKey, slotLabel]) => {
           const slotData = daySlots[slotKey];
-          // ライブラリから削除済みのメニューが割り当てられていたら未選択扱いにする
-          if (slotData.menuId && !menuLibraryState.items.some((m) => m.id === slotData.menuId)) {
-            slotData.menuId = "";
-          }
+          // ライブラリから削除済みのメニューは割り当てから外す
+          slotData.menuIds = slotData.menuIds.filter((id) => menuLibraryState.items.some((m) => m.id === id));
 
-          const row = document.createElement("div");
-          row.className = "meal-slot-row";
+          const slotBlock = document.createElement("div");
+          slotBlock.className = "meal-slot-block";
+
+          const header = document.createElement("div");
+          header.className = "meal-slot-header";
 
           const label = document.createElement("span");
           label.className = "meal-slot-label";
           label.textContent = slotLabel;
-          row.appendChild(label);
+          header.appendChild(label);
 
+          const doneLabel = document.createElement("label");
+          doneLabel.className = "meal-slot-done";
+          const doneCheckbox = document.createElement("input");
+          doneCheckbox.type = "checkbox";
+          doneCheckbox.checked = !!slotData.done;
+          doneCheckbox.addEventListener("change", () => {
+            slotData.done = doneCheckbox.checked;
+            saveJSON(LS_MEAL, mealState);
+          });
+          doneLabel.appendChild(doneCheckbox);
+          doneLabel.appendChild(document.createTextNode("実行済み"));
+          header.appendChild(doneLabel);
+          slotBlock.appendChild(header);
+
+          // メニューを選んで追加する行
+          const addRow = document.createElement("div");
+          addRow.className = "meal-slot-add-row";
           const select = document.createElement("select");
-          select.dataset.date = iso;
-          select.dataset.slot = slotKey;
           const emptyOption = document.createElement("option");
           emptyOption.value = "";
-          emptyOption.textContent = "未選択";
+          emptyOption.textContent = "メニューを選択";
           select.appendChild(emptyOption);
           menuLibraryState.items.forEach((menu) => {
             const opt = document.createElement("option");
             opt.value = menu.id;
             opt.textContent = menu.name;
-            if (menu.id === slotData.menuId) opt.selected = true;
             select.appendChild(opt);
           });
-          row.appendChild(select);
+          addRow.appendChild(select);
 
-          const selectedMenu = menuLibraryState.items.find((m) => m.id === slotData.menuId);
-          if (selectedMenu && selectedMenu.url) {
-            const link = document.createElement("a");
-            link.href = selectedMenu.url;
-            link.target = "_blank";
-            link.rel = "noopener";
-            link.className = "inline-link-icon";
-            link.textContent = "🔗";
-            link.setAttribute("aria-label", "参考URLを開く");
-            row.appendChild(link);
-          }
-
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = !!slotData.done;
-          row.appendChild(checkbox);
-
-          select.addEventListener("change", () => {
-            slotData.menuId = select.value;
+          const addSlotBtn = document.createElement("button");
+          addSlotBtn.type = "button";
+          addSlotBtn.className = "add-btn";
+          addSlotBtn.textContent = "追加";
+          addSlotBtn.addEventListener("click", () => {
+            if (!select.value || slotData.menuIds.includes(select.value)) return;
+            slotData.menuIds.push(select.value);
             saveJSON(LS_MEAL, mealState);
             renderMealGrid();
           });
-          checkbox.addEventListener("change", () => {
-            slotData.done = checkbox.checked;
-            saveJSON(LS_MEAL, mealState);
-          });
+          addRow.appendChild(addSlotBtn);
+          slotBlock.appendChild(addRow);
 
-          block.appendChild(row);
+          // 割り当て済みメニューの一覧（複数可、個別に削除できる）
+          const itemsList = document.createElement("ul");
+          itemsList.className = "meal-slot-items";
+          if (slotData.menuIds.length === 0) {
+            const li = document.createElement("li");
+            li.className = "empty-hint";
+            li.textContent = "未選択";
+            itemsList.appendChild(li);
+          } else {
+            slotData.menuIds.forEach((menuId) => {
+              const menu = menuLibraryState.items.find((m) => m.id === menuId);
+              if (!menu) return;
+              const li = document.createElement("li");
+              li.className = "item-row";
+              const linkHtml = menu.url
+                ? ` <a href="${escapeHtml(menu.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
+                : "";
+              li.innerHTML = `<span class="item-name">${escapeHtml(menu.name)}${linkHtml}</span><button type="button" class="item-delete" aria-label="削除">×</button>`;
+              li.querySelector(".item-delete").addEventListener("click", () => {
+                slotData.menuIds = slotData.menuIds.filter((id) => id !== menuId);
+                saveJSON(LS_MEAL, mealState);
+                renderMealGrid();
+              });
+              itemsList.appendChild(li);
+            });
+          }
+          slotBlock.appendChild(itemsList);
+
+          block.appendChild(slotBlock);
         });
 
         mealGridEl.appendChild(block);
