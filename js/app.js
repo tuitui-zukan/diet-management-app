@@ -767,6 +767,87 @@ ${pantryText}
         .trim();
     }
 
+    // 「① 鶏むね甘辛そぼろ（冷蔵4日）」のような見出しから、①→料理名の対応表を作る
+    // （表の中で①②③④のように番号だけで参照されるケースに対応するため）
+    function buildNumberedRecipeMap(text) {
+      const map = {};
+      const pattern = /^#{1,6}\s*([①②③④⑤⑥⑦⑧⑨⑩])\s*(.+)$/;
+      text.split("\n").forEach((line) => {
+        const m = line.trim().match(pattern);
+        if (m) {
+          const name = m[2].replace(/[（(].*$/, "").trim();
+          if (name) map[m[1]] = name;
+        }
+      });
+      return map;
+    }
+
+    // 表のマス目（例：「①そぼろ＋ごはん＋②スープ」）を個別の料理名に分割する
+    function splitMealCell(raw, numberedRecipeMap) {
+      return raw
+        .split(/[＋+、]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((fragment) => {
+          const m = fragment.match(/^([①②③④⑤⑥⑦⑧⑨⑩])(.*)$/);
+          if (!m) return fragment;
+          if (numberedRecipeMap[m[1]]) return numberedRecipeMap[m[1]];
+          return m[2].trim() || fragment;
+        })
+        .filter(Boolean);
+    }
+
+    // Markdownの表形式（| 曜日 | 朝 | 昼 | 夜 |）を解析する
+    function parseMealPlanTable(text, addResult) {
+      const tableLines = text
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("|") && (l.match(/\|/g) || []).length >= 3);
+      if (tableLines.length < 2) return;
+
+      const splitRow = (line) => line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+      let headerIdx = -1;
+      let headerCells = null;
+      for (let i = 0; i < tableLines.length; i += 1) {
+        const cells = splitRow(tableLines[i]);
+        if (cells.some((c) => /曜日|朝|昼|夜/.test(c.replace(/\*/g, "")))) {
+          headerIdx = i;
+          headerCells = cells;
+          break;
+        }
+      }
+      if (!headerCells) return;
+
+      let dowColumn = -1;
+      const slotColumns = {};
+      headerCells.forEach((cell, idx) => {
+        const stripped = cell.replace(/\*/g, "").trim();
+        if (/^曜日?$/.test(stripped)) dowColumn = idx;
+        if (/^朝食?$/.test(stripped)) slotColumns["朝食"] = idx;
+        if (/^昼食?$/.test(stripped)) slotColumns["昼食"] = idx;
+        if (/^(夕食|夜食?)$/.test(stripped)) slotColumns["夕食"] = idx;
+      });
+      if (dowColumn === -1 || Object.keys(slotColumns).length === 0) return;
+
+      const numberedRecipeMap = buildNumberedRecipeMap(text);
+
+      for (let i = headerIdx + 1; i < tableLines.length; i += 1) {
+        const cells = splitRow(tableLines[i]);
+        if (cells.every((c) => /^-+$/.test(c))) continue; // 区切り行はスキップ
+        const dowCellRaw = (cells[dowColumn] || "").replace(/\*/g, "").trim();
+        const dowMatch = dowCellRaw.match(/^(月|火|水|木|金|土|日)(曜日?)?$/);
+        if (!dowMatch) continue;
+        const dow = dowMatch[1];
+
+        Object.keys(slotColumns).forEach((slotLabel) => {
+          const raw = (cells[slotColumns[slotLabel]] || "").replace(/\*/g, "").trim();
+          if (!raw) return;
+          splitMealCell(raw, numberedRecipeMap).forEach((name) => addResult(dow, slotLabel, name));
+        });
+      }
+    }
+
     function parseMealPlanText(text) {
       const results = [];
       const seen = new Set();
@@ -801,6 +882,9 @@ ${pantryText}
           if (slot) addResult(currentDow, slot, mealMatch[2].trim());
         }
       });
+
+      // パターン3：Markdownの表形式（| 曜日 | 朝 | 昼 | 夜 |）
+      parseMealPlanTable(text, addResult);
 
       return results;
     }
