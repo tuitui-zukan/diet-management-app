@@ -745,17 +745,63 @@ ${pantryText}
     const importBtn = document.getElementById("meal-import-btn");
     const importStatusEl = document.getElementById("meal-import-status");
     const SLOT_LABEL_TO_KEY = { 朝食: "breakfast", 昼食: "lunch", 夕食: "dinner" };
+    // 依頼文で指定した「月曜,朝食,料理名」形式（1行完結）
     const MEAL_LINE_PATTERN = /^(月|火|水|木|金|土|日)(?:曜日?)?\s*[,、]\s*(朝食|昼食|夕食)\s*[,、]\s*(.+)$/;
+    // Claudeが見出し形式で返してきた場合（### 月曜日 → #### 昼：料理名 のような書き方）にも対応する
+    const DOW_HEADING_PATTERN = /^(月|火|水|木|金|土|日)曜日?$/;
+    const MEAL_HEADING_PATTERN = /^(朝食?|昼食?|夕食|夜食?|夜)[:：]\s*(.+)$/;
+
+    function normalizeSlotLabel(raw) {
+      if (raw === "朝" || raw === "朝食") return "朝食";
+      if (raw === "昼" || raw === "昼食") return "昼食";
+      if (raw === "夕食" || raw === "夜" || raw === "夜食") return "夕食";
+      return null;
+    }
+
+    // 見出し行の「### 」「#### 」やよく使われる絵文字・強調記号を取り除き、中身だけにする
+    function stripHeadingNoise(line) {
+      return line
+        .replace(/^#+\s*/, "")
+        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "")
+        .replace(/\*\*/g, "")
+        .trim();
+    }
 
     function parseMealPlanText(text) {
       const results = [];
-      text.split("\n").forEach((line) => {
+      const seen = new Set();
+      function addResult(dow, slot, name) {
+        const key = `${dow}|${slot}|${name}`;
+        if (seen.has(key) || !name) return;
+        seen.add(key);
+        results.push({ dow, slot, name });
+      }
+
+      const lines = text.split("\n");
+
+      // パターン1：「月曜,朝食,料理名」の1行完結フォーマット
+      lines.forEach((line) => {
         const m = line.trim().match(MEAL_LINE_PATTERN);
-        if (m) {
-          const name = m[3].trim();
-          if (name) results.push({ dow: m[1], slot: m[2], name });
+        if (m) addResult(m[1], m[2], m[3].trim());
+      });
+
+      // パターン2：見出しで曜日→食事の順に並んでいる形式
+      let currentDow = null;
+      lines.forEach((line) => {
+        const stripped = stripHeadingNoise(line);
+        const dowMatch = stripped.match(DOW_HEADING_PATTERN);
+        if (dowMatch) {
+          currentDow = dowMatch[1];
+          return;
+        }
+        if (!currentDow) return;
+        const mealMatch = stripped.match(MEAL_HEADING_PATTERN);
+        if (mealMatch) {
+          const slot = normalizeSlotLabel(mealMatch[1]);
+          if (slot) addResult(currentDow, slot, mealMatch[2].trim());
         }
       });
+
       return results;
     }
 
