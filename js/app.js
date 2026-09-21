@@ -426,13 +426,9 @@
 
     function getWeekData(id) {
       if (!mealState.weeks[id]) {
-        mealState.weeks[id] = { budget: "", inventoryItems: [], actualCost: "", days: {} };
+        mealState.weeks[id] = { budget: "", actualCost: "", days: {} };
       }
-      const data = mealState.weeks[id];
-      if (!data.inventoryItems) {
-        data.inventoryItems = data.inventory ? splitToItems(data.inventory) : []; // 旧バージョンからの移行
-      }
-      return data;
+      return mealState.weeks[id];
     }
 
     const MEAL_SLOTS = [["breakfast", "朝食"], ["lunch", "昼食"], ["dinner", "夕食"]];
@@ -459,17 +455,6 @@
       }
       return data.days[dateISO];
     }
-
-    const inventoryEditor = createItemListEditor({
-      getItems: () => getWeekData(weekId).inventoryItems,
-      setItems: (items) => {
-        getWeekData(weekId).inventoryItems = items;
-        saveJSON(LS_MEAL, mealState);
-      },
-      newItemInputId: "meal-inventory-new-item",
-      addBtnId: "meal-inventory-add-btn",
-      listId: "meal-inventory-item-list",
-    });
 
     function renderMealGrid() {
       mealGridEl.innerHTML = "";
@@ -719,7 +704,6 @@
       const pantryState = loadJSON("dietapp_pantry_v2", { items: [] });
       const budgetText = data.budget ? `${Number(data.budget).toLocaleString()}円` : "指定なし";
       const pantryText = pantryState.items.map((it) => it.name).join("、") || "（特になし）";
-      const inventoryText = data.inventoryItems.map((it) => it.name).join("、") || "（特になし）";
 
       return `以下の条件で、ダイエット向け・栄養バランスを考えた1週間分の献立を作ってください。
 
@@ -727,13 +711,10 @@
 【常備している調味料・食材】
 ${pantryText}
 
-【今週の冷蔵庫の在庫（優先的に使い切りたいもの）】
-${inventoryText}
-
 条件：
 - カロリーと栄養バランス（PFCバランス）を意識してください
 - 予算内に収めてください
-- 上記の在庫の食材を優先的に使い、余らせないようにしてください
+- 上記の食材を優先的に使い、余らせないようにしてください
 - 保存してあるインスタの投稿のスクリーンショットも一緒に渡すので、使えそうなものがあれば取り入れてください`;
     }
 
@@ -756,7 +737,6 @@ ${inventoryText}
       weekLabelEl.textContent = formatWeekLabel(weekId);
       budgetEl.value = data.budget;
       actualCostEl.value = data.actualCost;
-      inventoryEditor.render();
       renderMealGrid();
       renderDiff(data);
     }
