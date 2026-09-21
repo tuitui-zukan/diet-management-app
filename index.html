@@ -83,9 +83,13 @@
     <h2>献立管理</h2>
 
     <div class="card">
-      <label for="meal-pantry">常備している調味料・食材</label>
-      <textarea id="meal-pantry" rows="3" placeholder="例）醤油、みりん、塩、砂糖、オリーブオイル..."></textarea>
-      <p class="hint">↑週が変わってもリセットされません。献立を頼むときにこの内容も伝えると、買い足しが最小限になります</p>
+      <label for="pantry-new-item">常備している調味料・食材</label>
+      <div class="add-row">
+        <input type="text" id="pantry-new-item" placeholder="例）醤油">
+        <button id="pantry-add-btn" class="add-btn">追加</button>
+      </div>
+      <ul id="pantry-item-list" class="item-list"></ul>
+      <p class="hint">↑週が変わってもリセットされません</p>
     </div>
 
     <div class="card week-nav">
@@ -100,8 +104,12 @@
     </div>
 
     <div class="card">
-      <label for="meal-inventory">冷蔵庫の在庫メモ</label>
-      <textarea id="meal-inventory" rows="3" placeholder="例）鶏むね肉、卵、キャベツ半玉..."></textarea>
+      <label for="meal-inventory-new-item">冷蔵庫の在庫</label>
+      <div class="add-row">
+        <input type="text" id="meal-inventory-new-item" placeholder="例）鶏むね肉">
+        <button id="meal-inventory-add-btn" class="add-btn">追加</button>
+      </div>
+      <ul id="meal-inventory-item-list" class="item-list"></ul>
       <p class="hint">↑この内容と予算をClaudeに伝えると、使い切り＆予算内の献立を作ってもらえます</p>
     </div>
 
@@ -115,14 +123,21 @@
     </div>
 
     <div class="card">
-      <label for="meal-plan">今週の献立（Claudeから受け取った内容を貼り付け）</label>
-      <textarea id="meal-plan" rows="8" placeholder="Claudeが作成した1週間の献立をここに貼り付け（インスタのURLも一緒に貼ればタップ可能なリンクになります）"></textarea>
-      <div id="meal-plan-links" class="link-chips"></div>
+      <label for="menu-library-new-item">固定メニュー登録</label>
+      <div class="add-form">
+        <input type="text" id="menu-library-new-item" placeholder="例）鶏むね丼">
+        <div class="add-row">
+          <input type="url" id="menu-library-new-url" placeholder="参考URL（任意）" inputmode="url">
+          <button id="menu-library-add-btn" class="add-btn">追加</button>
+        </div>
+      </div>
+      <ul id="menu-library-item-list" class="item-list"></ul>
+      <p class="hint">↑登録したメニューを、下の週の献立で朝食・昼食・夕食に割り当てられます</p>
     </div>
 
     <div class="card">
-      <p class="card-label">実行チェック</p>
-      <div id="meal-days" class="meal-days"></div>
+      <p class="card-label">週の献立</p>
+      <div id="meal-grid" class="meal-grid"></div>
     </div>
 
     <div class="card">

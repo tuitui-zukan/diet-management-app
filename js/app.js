@@ -303,32 +303,112 @@
     totalId: "massage-total",
   });
 
+  // ---------- 項目リストの共通エディタ（追加・削除のみ、チェック機能なし） ----------
+  // 常備品・在庫・固定メニューの3箇所で使う
+  function splitToItems(text) {
+    return (text || "")
+      .split(/[\n,、]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((name, i) => ({ id: `migrated_${Date.now()}_${i}`, name, url: "" }));
+  }
+
+  function createItemListEditor(config) {
+    const nameInput = document.getElementById(config.newItemInputId);
+    const urlInput = config.newUrlInputId ? document.getElementById(config.newUrlInputId) : null;
+    const addBtn = document.getElementById(config.addBtnId);
+    const listEl = document.getElementById(config.listId);
+
+    function addItem() {
+      const name = nameInput.value.trim();
+      if (!name) return;
+      const url = urlInput ? urlInput.value.trim() : "";
+      const items = config.getItems();
+      items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name, url });
+      config.setItems(items);
+      nameInput.value = "";
+      if (urlInput) urlInput.value = "";
+      render();
+    }
+    addBtn.addEventListener("click", addItem);
+    [nameInput, urlInput].filter(Boolean).forEach((el) => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addItem();
+        }
+      });
+    });
+
+    function deleteItem(id) {
+      config.setItems(config.getItems().filter((it) => it.id !== id));
+      render();
+    }
+
+    function render() {
+      const items = config.getItems();
+      listEl.innerHTML = "";
+      if (items.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty-hint";
+        li.textContent = "項目を追加してください";
+        listEl.appendChild(li);
+      } else {
+        items.forEach((it) => {
+          const nameHtml = it.url
+            ? `${escapeHtml(it.name)} <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener" class="inline-link-icon" aria-label="参考URLを開く">🔗</a>`
+            : linkifyHtml(it.name);
+          const li = document.createElement("li");
+          li.className = "item-row";
+          li.innerHTML = `<span class="item-name">${nameHtml}</span><button class="item-delete" data-id="${it.id}" aria-label="削除">×</button>`;
+          listEl.appendChild(li);
+        });
+        listEl.querySelectorAll(".item-delete").forEach((btn) => {
+          btn.addEventListener("click", () => deleteItem(btn.dataset.id));
+        });
+      }
+      if (config.onRender) config.onRender();
+    }
+
+    render();
+    return { render };
+  }
+
   // ---------- 常備調味料・食材（週をまたいでリセットされない） ----------
   (function initPantry() {
-    const LS_PANTRY = "dietapp_pantry_v1";
-    const pantryState = loadJSON(LS_PANTRY, { text: "" });
-    const pantryEl = document.getElementById("meal-pantry");
-    pantryEl.value = pantryState.text || "";
-    pantryEl.addEventListener("input", () => {
-      pantryState.text = pantryEl.value;
+    const LS_PANTRY = "dietapp_pantry_v2";
+    let pantryState = loadJSON(LS_PANTRY, null);
+    if (!pantryState) {
+      const old = loadJSON("dietapp_pantry_v1", null); // 旧バージョン（自由記述）から移行
+      pantryState = { items: old && old.text ? splitToItems(old.text) : [] };
       saveJSON(LS_PANTRY, pantryState);
+    }
+
+    createItemListEditor({
+      getItems: () => pantryState.items,
+      setItems: (items) => {
+        pantryState.items = items;
+        saveJSON(LS_PANTRY, pantryState);
+      },
+      newItemInputId: "pantry-new-item",
+      addBtnId: "pantry-add-btn",
+      listId: "pantry-item-list",
     });
   })();
 
   // ---------- 献立モジュール ----------
   (function initMeal() {
     const LS_MEAL = "dietapp_meal_v1";
+    const LS_MENU_LIBRARY = "dietapp_menu_library_v1";
     const mealState = loadJSON(LS_MEAL, { weeks: {} });
+    const menuLibraryState = loadJSON(LS_MENU_LIBRARY, { items: [] });
     let weekId = currentWeekId();
 
     const weekLabelEl = document.getElementById("meal-week-label");
     const prevBtn = document.getElementById("meal-prev-week");
     const nextBtn = document.getElementById("meal-next-week");
     const budgetEl = document.getElementById("meal-budget");
-    const inventoryEl = document.getElementById("meal-inventory");
-    const planEl = document.getElementById("meal-plan");
-    const planLinksEl = document.getElementById("meal-plan-links");
-    const daysEl = document.getElementById("meal-days");
+    const mealGridEl = document.getElementById("meal-grid");
     const actualCostEl = document.getElementById("meal-actual-cost");
     const diffEl = document.getElementById("meal-diff");
     const promptBtn = document.getElementById("meal-prompt-btn");
@@ -338,10 +418,135 @@
 
     function getWeekData(id) {
       if (!mealState.weeks[id]) {
-        mealState.weeks[id] = { budget: "", inventory: "", plan: "", actualCost: "", days: {} };
+        mealState.weeks[id] = { budget: "", inventoryItems: [], actualCost: "", days: {} };
       }
-      return mealState.weeks[id];
+      const data = mealState.weeks[id];
+      if (!data.inventoryItems) {
+        data.inventoryItems = data.inventory ? splitToItems(data.inventory) : []; // 旧バージョンからの移行
+      }
+      return data;
     }
+
+    const MEAL_SLOTS = [["breakfast", "朝食"], ["lunch", "昼食"], ["dinner", "夕食"]];
+
+    function getDaySlots(data, dateISO) {
+      const existing = data.days[dateISO];
+      const isValid = existing && typeof existing === "object" && !Array.isArray(existing);
+      if (!isValid) {
+        data.days[dateISO] = {};
+        MEAL_SLOTS.forEach(([key]) => {
+          data.days[dateISO][key] = { menuId: "", done: false };
+        });
+      }
+      return data.days[dateISO];
+    }
+
+    const inventoryEditor = createItemListEditor({
+      getItems: () => getWeekData(weekId).inventoryItems,
+      setItems: (items) => {
+        getWeekData(weekId).inventoryItems = items;
+        saveJSON(LS_MEAL, mealState);
+      },
+      newItemInputId: "meal-inventory-new-item",
+      addBtnId: "meal-inventory-add-btn",
+      listId: "meal-inventory-item-list",
+    });
+
+    function renderMealGrid() {
+      mealGridEl.innerHTML = "";
+      const data = getWeekData(weekId);
+      const dates = getWeekDates(weekId);
+      const dows = ["月", "火", "水", "木", "金", "土", "日"];
+
+      dates.forEach((d, i) => {
+        const iso = isoDateStringFromUTC(d);
+        const daySlots = getDaySlots(data, iso);
+
+        const block = document.createElement("div");
+        block.className = "meal-day-block";
+
+        const heading = document.createElement("p");
+        heading.className = "meal-day-heading";
+        heading.textContent = `${d.getUTCMonth() + 1}/${d.getUTCDate()}（${dows[i]}）`;
+        block.appendChild(heading);
+
+        MEAL_SLOTS.forEach(([slotKey, slotLabel]) => {
+          const slotData = daySlots[slotKey];
+          // ライブラリから削除済みのメニューが割り当てられていたら未選択扱いにする
+          if (slotData.menuId && !menuLibraryState.items.some((m) => m.id === slotData.menuId)) {
+            slotData.menuId = "";
+          }
+
+          const row = document.createElement("div");
+          row.className = "meal-slot-row";
+
+          const label = document.createElement("span");
+          label.className = "meal-slot-label";
+          label.textContent = slotLabel;
+          row.appendChild(label);
+
+          const select = document.createElement("select");
+          select.dataset.date = iso;
+          select.dataset.slot = slotKey;
+          const emptyOption = document.createElement("option");
+          emptyOption.value = "";
+          emptyOption.textContent = "未選択";
+          select.appendChild(emptyOption);
+          menuLibraryState.items.forEach((menu) => {
+            const opt = document.createElement("option");
+            opt.value = menu.id;
+            opt.textContent = menu.name;
+            if (menu.id === slotData.menuId) opt.selected = true;
+            select.appendChild(opt);
+          });
+          row.appendChild(select);
+
+          const selectedMenu = menuLibraryState.items.find((m) => m.id === slotData.menuId);
+          if (selectedMenu && selectedMenu.url) {
+            const link = document.createElement("a");
+            link.href = selectedMenu.url;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.className = "inline-link-icon";
+            link.textContent = "🔗";
+            link.setAttribute("aria-label", "参考URLを開く");
+            row.appendChild(link);
+          }
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = !!slotData.done;
+          row.appendChild(checkbox);
+
+          select.addEventListener("change", () => {
+            slotData.menuId = select.value;
+            saveJSON(LS_MEAL, mealState);
+            renderMealGrid();
+          });
+          checkbox.addEventListener("change", () => {
+            slotData.done = checkbox.checked;
+            saveJSON(LS_MEAL, mealState);
+          });
+
+          block.appendChild(row);
+        });
+
+        mealGridEl.appendChild(block);
+      });
+    }
+
+    const menuLibraryEditor = createItemListEditor({
+      getItems: () => menuLibraryState.items,
+      setItems: (items) => {
+        menuLibraryState.items = items;
+        saveJSON(LS_MENU_LIBRARY, menuLibraryState);
+      },
+      newItemInputId: "menu-library-new-item",
+      newUrlInputId: "menu-library-new-url",
+      addBtnId: "menu-library-add-btn",
+      listId: "menu-library-item-list",
+      onRender: () => renderMealGrid(), // 登録メニューが変われば週の献立の選択肢も更新
+    });
 
     function renderDiff(data) {
       const budget = Number(data.budget) || 0;
@@ -364,10 +569,10 @@
     // 常備品・在庫・予算から、Claudeにそのまま渡せる依頼文を組み立てる
     function buildPrompt() {
       const data = getWeekData(weekId);
-      const pantryState = loadJSON("dietapp_pantry_v1", { text: "" });
+      const pantryState = loadJSON("dietapp_pantry_v2", { items: [] });
       const budgetText = data.budget ? `${Number(data.budget).toLocaleString()}円` : "指定なし";
-      const pantryText = (pantryState.text || "").trim() || "（特になし）";
-      const inventoryText = (data.inventory || "").trim() || "（特になし）";
+      const pantryText = pantryState.items.map((it) => it.name).join("、") || "（特になし）";
+      const inventoryText = data.inventoryItems.map((it) => it.name).join("、") || "（特になし）";
 
       return `以下の条件で、ダイエット向け・栄養バランスを考えた1週間分の献立を作ってください。
 
@@ -399,59 +604,14 @@ ${inventoryText}
       }
     });
 
-    // 献立欄に貼り付けたテキストからURLを見つけて、タップできるリンクにする
-    // （textareaは中の文字をHTMLとして表示できないので、下に別枠でボタンを出す）
-    function extractUrls(text) {
-      const matches = text.match(URL_PATTERN) || [];
-      const cleaned = matches.map(cleanTrailingPunctuation);
-      return [...new Set(cleaned)];
-    }
-
-    function renderPlanLinks(text) {
-      const urls = extractUrls(text);
-      planLinksEl.innerHTML = "";
-      urls.forEach((url) => {
-        const a = document.createElement("a");
-        a.href = url;
-        a.target = "_blank";
-        a.rel = "noopener";
-        a.className = "link-chip";
-        a.textContent = url.includes("instagram.com") ? "📷 Instagramを開く" : `🔗 ${url}`;
-        planLinksEl.appendChild(a);
-      });
-    }
-
-    function renderDays(data) {
-      daysEl.innerHTML = "";
-      const dates = getWeekDates(weekId);
-      const dows = ["月", "火", "水", "木", "金", "土", "日"];
-      dates.forEach((d, i) => {
-        const iso = isoDateStringFromUTC(d);
-        const checked = !!data.days[iso];
-        const row = document.createElement("label");
-        row.className = "meal-day-row";
-        row.innerHTML = `<span class="day-label">${d.getUTCMonth() + 1}/${d.getUTCDate()}（${dows[i]}）</span><input type="checkbox" ${checked ? "checked" : ""} data-date="${iso}">`;
-        daysEl.appendChild(row);
-      });
-      daysEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-        cb.addEventListener("change", () => {
-          if (cb.checked) data.days[cb.dataset.date] = true;
-          else delete data.days[cb.dataset.date];
-          saveJSON(LS_MEAL, mealState);
-        });
-      });
-    }
-
     function render() {
       const data = getWeekData(weekId);
       weekLabelEl.textContent = formatWeekLabel(weekId);
       budgetEl.value = data.budget;
-      inventoryEl.value = data.inventory;
-      planEl.value = data.plan;
       actualCostEl.value = data.actualCost;
-      renderDays(data);
+      inventoryEditor.render();
+      renderMealGrid();
       renderDiff(data);
-      renderPlanLinks(data.plan || "");
     }
 
     budgetEl.addEventListener("input", () => {
@@ -459,15 +619,6 @@ ${inventoryText}
       data.budget = budgetEl.value;
       saveJSON(LS_MEAL, mealState);
       renderDiff(data);
-    });
-    inventoryEl.addEventListener("input", () => {
-      getWeekData(weekId).inventory = inventoryEl.value;
-      saveJSON(LS_MEAL, mealState);
-    });
-    planEl.addEventListener("input", () => {
-      getWeekData(weekId).plan = planEl.value;
-      saveJSON(LS_MEAL, mealState);
-      renderPlanLinks(planEl.value);
     });
     actualCostEl.addEventListener("input", () => {
       const data = getWeekData(weekId);

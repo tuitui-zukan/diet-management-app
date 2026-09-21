@@ -122,31 +122,6 @@ textarea:focus, input:focus {
   resize: vertical;
 }
 
-.link-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-  scroll-margin-bottom: 100px;
-}
-
-.link-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  border-radius: 20px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .status-text {
   margin: 10px 0 0;
   font-size: 13px;
@@ -319,31 +294,66 @@ textarea:focus, input:focus {
   font-weight: 600;
 }
 
-.meal-days {
+.meal-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 
-.meal-day-row {
+.meal-day-block {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 14px;
+}
+
+.meal-day-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.meal-day-heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.meal-slot-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.meal-day-row:last-child { border-bottom: none; }
+.meal-slot-row:last-child {
+  margin-bottom: 0;
+}
 
-.meal-day-row .day-label {
-  width: 56px;
-  font-size: 13px;
+.meal-slot-label {
+  width: 40px;
+  flex-shrink: 0;
+  font-size: 12px;
   color: var(--color-sub);
 }
 
-.meal-day-row input[type="checkbox"] {
+.meal-slot-row select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #fafafa;
+  color: var(--color-text);
+}
+
+.meal-slot-row input[type="checkbox"] {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
+}
+
+.meal-slot-row .inline-link-icon {
+  flex-shrink: 0;
 }
 
 .diff-text {
