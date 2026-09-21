@@ -715,7 +715,14 @@ ${pantryText}
 - カロリーと栄養バランス（PFCバランス）を意識してください
 - 予算内に収めてください
 - 上記の食材を優先的に使い、余らせないようにしてください
-- 保存してあるインスタの投稿のスクリーンショットも一緒に渡すので、使えそうなものがあれば取り入れてください`;
+- 保存してあるインスタの投稿のスクリーンショットも一緒に渡すので、使えそうなものがあれば取り入れてください
+
+最後に、回答の一番下に下記の形式で1週間分をまとめて出力してください（このアプリへ貼り付けて読み込ませるためのものです。この部分は説明を挟まず、指定の形式のまま出力してください）：
+月曜,朝食,料理名
+月曜,昼食,料理名
+月曜,夕食,料理名
+火曜,朝食,料理名
+（以下、水曜〜日曜も同じ形式で）`;
     }
 
     promptBtn.addEventListener("click", () => {
@@ -730,6 +737,71 @@ ${pantryText}
       } catch (e) {
         promptTextEl.select();
       }
+    });
+
+    // Claudeの回答から「曜日,食事,料理名」の行を見つけて、
+    // 未登録の料理は固定メニューに自動登録し、週の献立に割り当てる
+    const importTextEl = document.getElementById("meal-import-text");
+    const importBtn = document.getElementById("meal-import-btn");
+    const importStatusEl = document.getElementById("meal-import-status");
+    const SLOT_LABEL_TO_KEY = { 朝食: "breakfast", 昼食: "lunch", 夕食: "dinner" };
+    const MEAL_LINE_PATTERN = /^(月|火|水|木|金|土|日)(?:曜日?)?\s*[,、]\s*(朝食|昼食|夕食)\s*[,、]\s*(.+)$/;
+
+    function parseMealPlanText(text) {
+      const results = [];
+      text.split("\n").forEach((line) => {
+        const m = line.trim().match(MEAL_LINE_PATTERN);
+        if (m) {
+          const name = m[3].trim();
+          if (name) results.push({ dow: m[1], slot: m[2], name });
+        }
+      });
+      return results;
+    }
+
+    function findOrCreateMenu(name) {
+      let menu = menuLibraryState.items.find((m) => m.name === name);
+      if (!menu) {
+        menu = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name, url: "" };
+        menuLibraryState.items.push(menu);
+      }
+      return menu;
+    }
+
+    importBtn.addEventListener("click", () => {
+      const parsed = parseMealPlanText(importTextEl.value);
+      if (parsed.length === 0) {
+        importStatusEl.textContent = "献立の形式を読み取れませんでした。「月曜,朝食,料理名」のような行が含まれているか確認してください。";
+        return;
+      }
+      const dows = ["月", "火", "水", "木", "金", "土", "日"];
+      const dates = getWeekDates(weekId);
+      const dowToIso = {};
+      dates.forEach((d, i) => {
+        dowToIso[dows[i]] = isoDateStringFromUTC(d);
+      });
+
+      const data = getWeekData(weekId);
+      let addedCount = 0;
+      parsed.forEach(({ dow, slot, name }) => {
+        const iso = dowToIso[dow];
+        const slotKey = SLOT_LABEL_TO_KEY[slot];
+        if (!iso || !slotKey) return;
+        const daySlots = getDaySlots(data, iso);
+        const menu = findOrCreateMenu(name);
+        if (!daySlots[slotKey].menuIds.includes(menu.id)) {
+          daySlots[slotKey].menuIds.push(menu.id);
+          addedCount += 1;
+        }
+      });
+
+      saveJSON(LS_MENU_LIBRARY, menuLibraryState);
+      saveJSON(LS_MEAL, mealState);
+      menuLibraryEditor.render();
+      renderMealDefaults();
+      renderMealGrid();
+      importTextEl.value = "";
+      importStatusEl.textContent = `${addedCount}件を週の献立に反映しました`;
     });
 
     function render() {
